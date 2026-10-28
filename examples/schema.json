@@ -1,0 +1,11 @@
+{
+  "columns": [
+    {"source":"id", "target":"listing_id", "type":"text", "required":true},
+    {"source":"price", "target":"price", "type":"decimal", "required":true},
+    {"source":"area", "target":"area_sqm", "type":"decimal", "required":true},
+    {"source":"available", "target":"available_on", "type":"date", "required":true},
+    {"source":"contact", "target":"contact", "type":"email", "required":false}
+  ],
+  "trim":true,
+  "dedupe":true
+}

@@ -1,0 +1,11 @@
+{
+  "name":"novasia-csv-quality-lab",
+  "version":"1.0.0",
+  "private":true,
+  "description":"Local CSV column mapping, validation, duplicate reporting and safe export for property and spreadsheet imports.",
+  "license":"MIT",
+  "homepage":"https://novasia.estate/",
+  "repository":"https://github.com/novasia-estate/csv-quality-lab",
+  "engines":{"node":">=22"},
+  "scripts":{"test":"node --test tests/*.test.cjs","build":"node build.cjs"}
+}

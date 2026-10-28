@@ -1,0 +1,6 @@
+id;price;area;available;contact
+TH-001;3500000;80;2026-12-01;team@example.com
+TH-002;;65;2026-02-30;team@example.com
+TH-001;3500000;80;2026-12-01;team@example.com
+ID-003;220000;not-known;2027-01-01;no-email
+KH-004;95000;45;2026-11-01;agent@example.com

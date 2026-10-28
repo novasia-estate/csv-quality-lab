@@ -1,0 +1,26 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {spawnSync}=require('node:child_process');
+const {analyze:A,inspect:I,parseCSV:P}=require('../engine.js');
+const rule=(source,type='text',required=false,target=source)=>({source,target,type,required});
+test('sample maps columns and separates invalid records and duplicates',()=>{
+ const r=A(fs.readFileSync('examples/listings.csv','utf8'),JSON.parse(fs.readFileSync('examples/schema.json')));
+ assert.deepEqual(r.summary,{inputRecords:5,accepted:2,rejected:2,duplicates:1,blank:0,issues:4,protectedCells:0});
+ assert.equal(r.headers[0],'listing_id');assert.deepEqual(r.duplicates,[{record:3,duplicateOf:1}]);
+});
+test('quoted multiline, comma and escaped quote round trip',()=>{const s='name,detail\r\n"A, B","two\nlines ""quoted"""\r\n';const r=A(s);assert.equal(r.accepted[0].values[1],'two\nlines "quoted"');assert.deepEqual(P(r.cleanedCSV).rows,P(s).rows);});
+test('column mismatch quarantines original without silently truncating',()=>{const r=A('a,b\n1,2,3\n4,5');assert.equal(r.summary.rejected,1);assert.deepEqual(r.rejected[0].original,['1','2','3']);assert.equal(r.summary.accepted,1);});
+test('duplicate headers and silent mapping drops fail',()=>{assert.throws(()=>I('a,a\n1,2'));assert.throws(()=>A('a,b\n1,2',{columns:[rule('a')]}));});
+test('reordered mapping follows source names',()=>{const r=A('b,a\n2,1',{columns:[rule('a','integer',true,'first'),rule('b','integer',true,'second')]});assert.deepEqual(r.accepted[0].values,['1','2']);});
+test('required and optional blanks',()=>{assert.equal(A('a,b\nx,',{columns:[rule('a','text',true),rule('b','integer')]}).summary.accepted,1);assert.equal(A('a\n" "',{columns:[rule('a','text',true)]}).summary.blank,1);});
+test('strict real ISO dates reject rollover',()=>{const r=A('d\n2026-02-30\n2028-02-29',{columns:[rule('d','date',true)]});assert.equal(r.summary.rejected,1);assert.equal(r.summary.accepted,1);});
+test('decimal formats explicit, integer safe range',()=>{const r=A('dot;comma;int\n1.5;1,5;42\n1,5;1.5;9007199254740993',{columns:[rule('dot','decimal'),rule('comma','decimal-comma'),rule('int','integer')]});assert.equal(r.summary.rejected,1);assert.equal(r.summary.accepted,1);});
+test('formula prefixes escaped in headers and values on CSV export',()=>{const r=A('=header,value\n=SUM(1),@bad\n\t=1,+2');assert.match(r.cleanedCSV,/"'=header"/);assert.match(r.cleanedCSV,/"'@bad"/);assert.equal(r.summary.protectedCells,5);assert.equal(r.accepted[0].values[0],'=SUM(1)');});
+test('dedupe off preserves exact repeats and blank record count reconciles',()=>{const r=A('a\nx\nx\n\n',{dedupe:false});assert.equal(r.summary.accepted,2);assert.equal(r.summary.blank,1);assert.equal(r.summary.inputRecords,r.summary.accepted+r.summary.rejected+r.summary.duplicates+r.summary.blank);});
+test('malformed quotes fail instead of partial output',()=>assert.throws(()=>A('a,b\n"broken,2')));
+test('tab delimiter and BOM',()=>{const r=A('\ufeffa\tb\n1\t2');assert.equal(r.delimiter,'\t');assert.equal(r.summary.accepted,1);});
+test('email and web URL format checks reject executable schemes',()=>{const r=A('mail,url\na@example.com,https://example.com\nnot-email,javascript:alert(1)',{columns:[rule('mail','email'),rule('url','url')]});assert.equal(r.summary.accepted,1);assert.equal(r.summary.issues,2);});
+test('invalid schemas rejected, prototype-like names safe as arrays',()=>{assert.throws(()=>A('a\n1',{columns:[rule('a','unknown')]}));const r=A('__proto__\nx');assert.equal(r.accepted[0].values[0],'x');});
+test('CLI report status reflects quarantined rows',()=>{const r=spawnSync(process.execPath,['cli.cjs','examples/listings.csv','examples/schema.json'],{encoding:'utf8'});assert.equal(r.status,1);assert.equal(JSON.parse(r.stdout).summary.rejected,2);});
+test('large and empty CSV rejected',()=>{assert.throws(()=>A(''));assert.throws(()=>A('a\n'+'x'.repeat(2000000)));});
