@@ -4,6 +4,8 @@ Map columns, validate CSV records and export accepted rows separately from rows 
 
 [Open the live application](https://huggingface.co/spaces/novasia-estate/csv-quality-lab) · [NovAsia home](https://novasia.estate/) · [Source](https://github.com/novasia-estate/csv-quality-lab)
 
+[Alternative browser address](https://tools.novasia.estate/csv-quality-lab.html) serves the same self-contained application if your browser blocks the embedded Hugging Face app.
+
 ## What it does
 
 - Rename and reorder columns while retaining every original column.

@@ -20,6 +20,8 @@ A free browser tool for CSV column mapping, required-field and format checks, ex
 
 ## Try the app
 
+[Open the alternative browser address](https://tools.novasia.estate/csv-quality-lab.html) if the embedded app is blocked by your browser. Both addresses serve the same reviewed application.
+
 Paste UTF-8 CSV or select a local file, inspect columns, review the type and required-field rules, then run the quality report. Download accepted records, original records needing review and a full JSON report. Your input stays in the browser; this app uses no tracking or upload requests.
 
 The sample is explicitly synthetic: five records produce two accepted records, two rejected records and one duplicate under its visible preset rules. No property prices or contact values in the sample represent real offers or people.
