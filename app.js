@@ -16,9 +16,11 @@ function inspectColumns(preset){
       const target=node('input');target.value=rule.target;target.maxLength=200;target.setAttribute('aria-label','Output name for '+source);nameLabel.append(target);
       const typeLabel=node('label','Check');const type=node('select');type.setAttribute('aria-label','Type for '+source);
       for(const value of CSVQuality.TYPES){const opt=node('option',value);opt.value=value;type.append(opt);}type.value=rule.type;typeLabel.append(type);
-      const reqLabel=node('label');reqLabel.className='check';const required=node('input');required.type='checkbox';required.checked=rule.required;reqLabel.append(required,node('span','Required'));
-      card.append(title,nameLabel,typeLabel,reqLabel);$('mapping').append(card);mapping.push({source,target,type,required});
-      for(const control of [target,type,required])control.addEventListener('change',invalidate);
+      const reqLabel=node('label');reqLabel.className='check';const required=node('input');required.type='checkbox';required.checked=rule.required;required.setAttribute('aria-label','Required for '+source);reqLabel.append(required,node('span','Required'));
+      const identityLabel=node('label');identityLabel.className='check';const identity=node('input');identity.type='checkbox';identity.checked=!!preset?.identityColumns?.includes(rule.target);identity.setAttribute('aria-label','Identity key for '+source);identityLabel.append(identity,node('span','Identity key'));
+      const checks=node('div');checks.append(reqLabel,identityLabel);
+      card.append(title,nameLabel,typeLabel,checks);$('mapping').append(card);mapping.push({source,target,type,required,identity});
+      for(const control of [target,type,required,identity])control.addEventListener('change',invalidate);
     }
     $('step-two').hidden=false;$('analyze').disabled=false;
     message(`${result.headers.length} columns · ${result.dataRows} data records. Review the rules, then run the report.`);
@@ -28,7 +30,7 @@ function run(){
   invalidate();
   try{
     if(inspectedText!==$('csv').value)throw Error('CSV changed. Inspect columns again before analysing.');
-    report=CSVQuality.analyze($('csv').value,{delimiter:$('delimiter').value,trim:$('trim').checked,dedupe:$('dedupe').checked,columns:mapping.map(m=>({source:m.source,target:m.target.value,type:m.type.value,required:m.required.checked}))});
+    report=CSVQuality.analyze($('csv').value,{delimiter:$('delimiter').value,trim:$('trim').checked,dedupe:$('dedupe').checked,identityColumns:mapping.filter(m=>m.identity.checked).map(m=>m.target.value),columns:mapping.map(m=>({source:m.source,target:m.target.value,type:m.type.value,required:m.required.checked}))});
     $('summary').replaceChildren();
     for(const [label,key] of [['Accepted','accepted'],['Needs review','rejected'],['Duplicates','duplicates'],['Blank records','blank']]){const card=node('div');card.className='stat';card.append(node('strong',String(report.summary[key])),node('span',label));$('summary').append(card);}
     $('issues').replaceChildren();for(const issue of report.issues.slice(0,30))$('issues').append(node('li',`Record ${issue.record}${issue.column?' · '+issue.column:''}: ${issue.message}`));
@@ -36,7 +38,7 @@ function run(){
     const table=node('table'),head=node('thead'),tr=node('tr');for(const h of ['Record',...report.headers])tr.append(node('th',h));head.append(tr);table.append(head);
     const body=node('tbody');for(const row of report.accepted.slice(0,12)){const tr=node('tr');for(const cell of [row.record,...row.values])tr.append(node('td',String(cell)));body.append(tr);}table.append(body);$('preview').replaceChildren(table);
     $('results').hidden=false;for(const id of ['download-good','download-rejected','download-report'])$(id).disabled=false;
-    message(`${report.summary.issues} validation issues. ${report.summary.protectedCells} formula-like cells will be escaped in the accepted CSV. Preview shows up to 12 accepted records; JSON contains all records and issues.`);
+    message(`${report.summary.issues} validation issues. ${report.identityReview?report.identityReview.conflictGroups.length+' repeated identity groups quarantined. ':''}${report.summary.protectedCells} formula-like cells will be escaped in the accepted CSV. Preview shows up to 12 accepted records; JSON contains all records and issues.`);
   }catch(error){message(error.message,true);}
 }
 function download(kind){if(!report)return;const content=kind==='json'?JSON.stringify(report,null,2):kind==='rejected'?report.rejectedCSV:report.cleanedCSV;const blob=new Blob([content],{type:kind==='json'?'application/json':'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download=kind==='json'?'csv-quality-report.json':kind==='rejected'?'csv-needs-review.csv':'csv-accepted.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}

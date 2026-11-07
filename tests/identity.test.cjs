@@ -1,0 +1,17 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {analyze:A}=require('../engine.js');
+const rule=(source,target=source,type='text')=>({source,target,type,required:false});
+test('repeated identity quarantines every occurrence, not the first or last winner',()=>{const r=A('id,price\nA,10\nA,11\nB,20',{identityColumns:['id']});assert.equal(r.summary.accepted,1);assert.deepEqual(r.rejected.map(x=>x.record),[1,2]);assert.deepEqual(r.identityReview.conflictGroups,[{records:[1,2]}]);});
+test('identical repeated identities are review rows instead of silently deduped',()=>{const r=A('id,p\nA,10\nA,10',{identityColumns:['id']});assert.equal(r.summary.rejected,2);assert.equal(r.summary.duplicates,0);});
+test('dedupe off does not disable explicit identity contract',()=>{const r=A('id,p\nA,10\nA,10',{identityColumns:['id'],dedupe:false});assert.equal(r.summary.rejected,2);});
+test('type-invalid neighbor still makes the shared identity ambiguous',()=>{const r=A('id,p\nA,10\nA,bad',{identityColumns:['id'],columns:[rule('id'),rule('p','p','decimal')]});assert.equal(r.summary.rejected,2);assert.ok(r.rejected[1].issues.some(x=>x.code==='type'));assert.ok(r.rejected[0].issues.some(x=>x.code==='duplicate_identity'));});
+test('selected identity must be complete even if its column was otherwise optional',()=>{const r=A('id,p\n,10\nB,20',{identityColumns:['id']});assert.equal(r.summary.rejected,1);assert.equal(r.issues[0].code,'identity_missing');});
+test('compound key is exact and not a delimiter concatenation',()=>{const r=A('building,unit,p\na|b,c,10\na,b|c,20',{identityColumns:['building','unit']});assert.equal(r.summary.accepted,2);});
+test('same unit label in different buildings is not a compound collision',()=>{const r=A('building,unit\nA,101\nB,101',{identityColumns:['building','unit']});assert.equal(r.summary.accepted,2);});
+test('target names after reorder/rename define the selected identity',()=>{const r=A('id,p\nA,10\nA,11',{columns:[rule('p','price'),rule('id','listing_id')],identityColumns:['listing_id']});assert.equal(r.summary.rejected,2);assert.deepEqual(r.headers,['price','listing_id']);});
+test('trim policy consistently governs identity equality',()=>{const csv='id,p\nA,10\n A ,11';assert.equal(A(csv,{identityColumns:['id']}).summary.rejected,2);assert.equal(A(csv,{identityColumns:['id'],trim:false}).summary.accepted,2);});
+test('invalid identity selection fails rather than being ignored',()=>{for(const keys of [null,'id',['missing'],['id','id'],[null]])assert.throws(()=>A('id\nA',{identityColumns:keys}));});
+test('old default exact-dedupe behavior remains available without identity selection',()=>{const r=A('id,p\nA,10\nA,10');assert.equal(r.summary.accepted,1);assert.equal(r.summary.duplicates,1);assert.ok(!('identityReview' in r));});
+test('counts reconcile with shape errors, blanks and selected-identity conflicts',()=>{const r=A('id,p\nA,10\nA,11\nB,20\nC,30,extra\n\n',{identityColumns:['id']});const s=r.summary;assert.equal(s.inputRecords,s.accepted+s.rejected+s.duplicates+s.blank);assert.equal(s.rejected,3);});
+test('new conflict ledger excludes the raw key and preserves input values in explicit rejection records',()=>{const r=A('id,p\nPRIVATE,10\nPRIVATE,11',{identityColumns:['id']});assert.ok(!JSON.stringify(r.identityReview).includes('PRIVATE'));assert.equal(r.rejected[0].original[0],'PRIVATE');});

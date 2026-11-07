@@ -50,7 +50,7 @@
     return false;
   }
   function analyze(text, options={}) {
-    const {delimiter='auto',trim=true,dedupe=true,columns}=options;
+    const {delimiter='auto',trim=true,dedupe=true,columns,identityColumns=[]}=options;
     if(typeof trim!=='boolean'||typeof dedupe!=='boolean') throw Error('trim and dedupe must be true or false.');
     const parsed=parseCSV(text,delimiter),headers=inspect(text,delimiter).headers;
     const rules=columns===undefined ? headers.map(source=>({source,target:source,type:'text',required:false})) : columns;
@@ -63,6 +63,15 @@
       sources.add(rule.source);names.add(rule.target);
     }
     const indices=rules.map(rule=>headers.indexOf(rule.source)),outputHeaders=rules.map(rule=>rule.target);
+    if(!Array.isArray(identityColumns)||identityColumns.length>headers.length||identityColumns.some(name=>typeof name!=='string'||!names.has(name))||new Set(identityColumns).size!==identityColumns.length) throw Error('Identity columns must be unique mapped output names.');
+    const identityIndices=identityColumns.map(name=>outputHeaders.indexOf(name)),identityGroups=new Map();
+    const identityKey=row=>JSON.stringify(identityIndices.map(i=>row[i]));
+    if(identityIndices.length) parsed.rows.slice(1).forEach((input,index)=>{
+      if(input.length!==headers.length||input.every(cell=>!cell.trim()))return;
+      const row=indices.map(i=>trim?input[i].trim():input[i]);
+      if(identityIndices.some(i=>!row[i].trim()))return;
+      const key=identityKey(row);if(!identityGroups.has(key))identityGroups.set(key,[]);identityGroups.get(key).push(index+1);
+    });
     const accepted=[],rejected=[],issues=[],duplicates=[],blankRows=[],seen=new Map();
     parsed.rows.slice(1).forEach((input,index)=>{
       const record=index+1; // Logical data record, excluding header; not a physical line number.
@@ -77,13 +86,18 @@
         if(!value.trim()) { if(rule.required) problems.push({record,column:rule.target,code:'required',message:'Required value is empty.'}); }
         else if(!valid(value,rule.type)) problems.push({record,column:rule.target,code:'type',message:`Expected ${rule.type}; value retained without guessing.`});
       });
+      if(identityIndices.length) {
+        if(identityIndices.some(i=>!row[i].trim()))problems.push({record,code:'identity_missing',message:'Selected identity fields must be nonblank; row retained for review.'});
+        else if(identityGroups.get(identityKey(row)).length>1)problems.push({record,code:'duplicate_identity',message:'Selected identity is repeated; every occurrence is retained for review, with no chosen winner.'});
+      }
       if(problems.length) {issues.push(...problems);rejected.push({record,original:input,issues:problems});return;}
       const key=JSON.stringify(row);
       if(dedupe&&seen.has(key)) {duplicates.push({record,duplicateOf:seen.get(key)});return;}
       seen.set(key,record);accepted.push({record,values:row});
     });
     const protectedCells=[outputHeaders,...accepted.map(row=>row.values)].flat().filter(value=>safeCell(value)!==value).length;
-    return {version:'1.0.0',delimiter:parsed.delimiter,headers:outputHeaders,
+    return {version:'1.1.0',delimiter:parsed.delimiter,headers:outputHeaders,
+      ...(identityIndices.length?{identityReview:{columns:[...identityColumns],conflictGroups:[...identityGroups.values()].filter(records=>records.length>1).map(records=>({records}))}}:{}),
       summary:{inputRecords:parsed.rows.length-1,accepted:accepted.length,rejected:rejected.length,duplicates:duplicates.length,blank:blankRows.length,issues:issues.length,protectedCells},
       accepted,rejected,issues,duplicates,blankRows,
       cleanedCSV:csv([outputHeaders,...accepted.map(row=>row.values)]),

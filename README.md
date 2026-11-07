@@ -18,6 +18,20 @@ The included synthetic property-feed example has five records. With its visible 
 
 ## Browser use
 
+### Identity review in 1.1
+
+Select **Identity key** for one or more mapped columns when they jointly identify a source record, such as building + unit. The tool quarantines **every** repeated identity, including the first occurrence and exact repeats, instead of silently choosing a winner. Blank selected identity fields require review too. A type-invalid neighbor still makes the shared identity ambiguous.
+
+Identity equality follows your existing trim setting and exact string comparison. It does not invent IDs or merge similar listings. Without an identity selection, the original whole-row exact-deduplication behavior remains unchanged. The JSON report's `identityReview` records the chosen output columns and logical record indexes for conflict groups, without copying raw keys into that ledger. Rejected records still retain their original values under your existing export controls.
+
+CLI schema example:
+
+```json
+{"identityColumns": ["listing_id"], "trim": true, "dedupe": true}
+```
+
+Use mapped **output names** in `identityColumns`; full column/type mappings remain optional as before. Choosing a key is a declaration about the source contract, not verification that two real properties are identical.
+
 Open the live application, paste a CSV or select a local UTF-8 file, inspect columns, choose rules and run the report. New uploads default to text checks; the sample has its own explicit preset. The application makes no network requests with your input, uses no analytics and stores no inputs. The hosting platform serves the application and has its own infrastructure policies.
 
 Limits: 2 MB UTF-8, 10,000 data records, 200 columns. Auto delimiter detection supports comma, semicolon and tab; choose explicitly for ambiguous one-column data. Quoted multiline records count as one logical record. Preview is limited to 12 accepted records and the first 30 issue messages; downloads contain all records and issues.
